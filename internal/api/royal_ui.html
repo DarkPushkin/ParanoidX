@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Royal Node</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0a0e14;color:#c9d1d9;padding:20px}
+h1{color:#58a6ff;font-size:20px;margin-bottom:16px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:12px}
+.card h2{font-size:14px;color:#8b949e;margin-bottom:8px}
+.row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+.row .label{color:#8b949e}
+.row .value{font-weight:600}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.badge-green{background:#1b3a1b;color:#3fb950}
+.badge-orange{background:#3d2e00;color:#d29922}
+.badge-red{background:#3d1a1a;color:#f85149}
+.btn{display:inline-block;padding:6px 14px;border-radius:6px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;font-size:12px;cursor:pointer;margin:3px}
+.btn:hover{background:#30363d}
+.btn-primary{background:#1f6feb;border-color:#1f6feb;color:#fff}
+.btn-primary:hover{background:#388bfd}
+.btn-danger{background:#da3633;border-color:#da3633;color:#fff}
+.btn-danger:hover{background:#f85149}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.mt-8{margin-top:8px}
+.mb-8{margin-bottom:8px}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+pre{font-size:11px;color:#8b949e;max-height:300px;overflow:auto}
+input,select{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px 10px;color:#c9d1d9;font-size:12px;width:100%;margin:4px 0}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:100}
+.modal.open{display:flex;align-items:center;justify-content:center}
+.modal-content{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;width:90%;max-width:420px}
+.modal-content h3{font-size:14px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<h1>Royal Treasury</h1>
+<div class="grid" id="stats"></div>
+<h2 style="font-size:14px;color:#8b949e;margin:16px 0 8px">Actions</h2>
+<div id="actions" class="mb-8"></div>
+<h2 style="font-size:14px;color:#8b949e;margin:16px 0 8px">Audit Log</h2>
+<div id="audit"><p style="color:#8b949e;font-size:12px">Loading...</p></div>
+<div class="modal" id="modal"><div class="modal-content" id="modalBody"></div></div>
+<script>
+const BASE='';
+async function api(path,opts){const r=await fetch(BASE+path,opts||{});return r.json()}
+function openModal(html){document.getElementById('modalBody').innerHTML=html;document.getElementById('modal').classList.add('open')}
+function closeModal(){document.getElementById('modal').classList.remove('open')}
+document.getElementById('modal').onclick=function(e){if(e.target===this)closeModal()}
+function val(v,d){return v??d??'-'}
+function fmtNg(n){if(n===0||n)return Number(n).toLocaleString();return '-'}
+function badge(s){
+  if(s==='healthy'||s==='T3'||s==='T2')return'<span class="badge badge-green">'+s+'</span>'
+  if(s==='warn'||s==='T1')return'<span class="badge badge-orange">'+s+'</span>'
+  return'<span class="badge badge-red">'+s+'</span>'}
+function row(l,v,cl){return'<div class="row"><span class="label">'+l+'</span><span class="value'+(cl?' '+cl:'')+'">'+v+'</span></div>'}
+
+async function loadStats(){
+  try{
+    const[s,f,o,r]=await Promise.all([
+      api('/api/royal/treasury/state'),
+      api('/api/royal/treasury/forecast'),
+      api('/api/royal/treasury/oracle'),
+      api('/api/royal/treasury/reserve')])
+    document.getElementById('stats').innerHTML=
+      '<div class="card"><h2>Reserve</h2>'+row('Silver (ng)',fmtNg(s.reserve_ng))+row('Silver (TLR)',val(s.reserve_tlr))+row('Tier',badge(s.tier))+row('Coverage',val(r.coverage_pct?(r.coverage_pct).toFixed(1)+'%':' -'))+'</div>'+
+      '<div class="card"><h2>Supply</h2>'+row('Supply (ng)',fmtNg(s.supply_ng))+row('Accounts',val(s.accounts))+row('Active BN',val(s.active_banknotes+'/'+s.total_banknotes))+'</div>'+
+      '<div class="card"><h2>Forecast</h2>'+row('Health',badge(f.health))+row('Months Left',val(f.months_until_depleted))+row('USD Value','$'+Number(f.total_usd_value||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}))+'</div>'+
+      '<div class="card"><h2>Oracle</h2>'+row('Silver Spot','$'+Number(o.current_price||0).toFixed(2))+row('Updated',o.last_updated?new Date(o.last_updated).toLocaleString():'-')+'</div>'
+    document.getElementById('actions').innerHTML=
+      '<button class="btn btn-primary" onclick="doAction(\'auto-mint\')">Auto-Mint</button>'+
+      '<button class="btn btn-danger" onclick="doAction(\'deflation\')">Deflation</button>'+
+      '<button class="btn" onclick="showOracleForm()">Update Oracle</button>'+
+      '<button class="btn" onclick="showDividendForm()">Dividend</button>'+
+      '<button class="btn" onclick="showMintForm()">Mint Asset</button>'+
+      '<button class="btn btn-danger" onclick="showBurnForm()">Burn Asset</button>'
+  }catch(e){document.getElementById('stats').innerHTML='<div class="card"><p style="color:#f85149">Error: '+e.message+'</p></div>'}}
+
+async function loadAudit(){
+  try{
+    const d=await api('/api/royal/audit-log?limit=30')
+    const es=d.entries||[]
+    if(!es.length){document.getElementById('audit').innerHTML='<p style="color:#8b949e;font-size:12px">No entries</p>';return}
+    document.getElementById('audit').innerHTML=es.map(e=>'<div class="row" style="font-size:11px"><span>'+e.action+'</span><span style="color:#8b949e">'+(e.timestamp||'').substring(0,16)+'</span></div>').join('')
+  }catch(e){document.getElementById('audit').innerHTML='<p style="color:#f85149">Load error</p>'}}
+
+async function doAction(act){
+  try{
+    const r=await api('/api/royal/treasury/'+act,{method:'POST'})
+    if(r.ok){loadStats();loadAudit();openModal('<h3>Success</h3><p>'+act+' triggered</p><pre>'+JSON.stringify(r,null,2)+'</pre><button class="btn mt-8" onclick="closeModal()">Close</button>')}
+    else openModal('<h3>Error</h3><p>'+r.error+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')
+  }catch(e){openModal('<h3>Error</h3><p>'+e.message+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')}}
+
+function showOracleForm(){openModal(
+  '<h3>Update Oracle Price</h3><input type="number" id="oraclePrice" step="0.01" value="75" placeholder="Price USD/oz"><button class="btn btn-primary mt-8" onclick="doOracle()">Update</button><button class="btn mt-8" onclick="closeModal()">Cancel</button>')}
+async function doOracle(){
+  const p=document.getElementById('oraclePrice').value;closeModal()
+  try{
+    const r=await api('/api/royal/treasury/oracle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({price:parseFloat(p)})})
+    if(r.ok){loadStats();openModal('<h3>Oracle Updated</h3><pre>'+JSON.stringify(r,null,2)+'</pre><button class="btn mt-8" onclick="closeModal()">Close</button>')}
+    else openModal('<h3>Error</h3><p>'+r.error+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')
+  }catch(e){openModal('<h3>Error</h3><p>'+e.message+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')}}
+
+function showDividendForm(){openModal(
+  '<h3>Trigger Dividend</h3><input type="number" id="divPool" value="1000000000" placeholder="Pool (ng)"><button class="btn btn-primary mt-8" onclick="doDividend()">Trigger</button><button class="btn mt-8" onclick="closeModal()">Cancel</button>')}
+async function doDividend(){
+  const p=document.getElementById('divPool').value;closeModal()
+  try{
+    const r=await api('/api/royal/treasury/dividend?action=trigger&pool_ng='+p,{method:'POST'})
+    if(r.ok){loadStats();loadAudit();openModal('<h3>Dividend Triggered</h3><pre>'+JSON.stringify(r,null,2)+'</pre><button class="btn mt-8" onclick="closeModal()">Close</button>')}
+    else openModal('<h3>Error</h3><p>'+r.error+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')
+  }catch(e){openModal('<h3>Error</h3><p>'+e.message+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')}}
+
+function showMintForm(){openModal(
+  '<h3>Mint Asset</h3><input id="mintHolder" placeholder="Holder Pubkey"><input id="mintAmount" type="number" placeholder="Amount (ng)"><input id="mintReason" placeholder="Reason"><button class="btn btn-primary mt-8" onclick="doMint()">Mint</button><button class="btn mt-8" onclick="closeModal()">Cancel</button>')}
+async function doMint(){closeModal()
+  try{
+    const r=await api('/api/royal/treasury/mint',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({holder:document.getElementById('mintHolder').value,amount_ng:parseInt(document.getElementById('mintAmount').value)||0,reason:document.getElementById('mintReason').value})})
+    if(r.ok){loadStats();loadAudit();openModal('<h3>Minted</h3><pre>'+JSON.stringify(r,null,2)+'</pre><button class="btn mt-8" onclick="closeModal()">Close</button>')}
+    else openModal('<h3>Error</h3><p>'+r.error+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')
+  }catch(e){openModal('<h3>Error</h3><p>'+e.message+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')}}
+
+function showBurnForm(){openModal(
+  '<h3>Burn Asset</h3><input id="burnAsset" placeholder="Asset ID"><input id="burnHolder" placeholder="Holder Pubkey"><input id="burnReason" placeholder="Reason"><button class="btn btn-primary mt-8" onclick="doBurn()">Burn</button><button class="btn mt-8" onclick="closeModal()">Cancel</button>')}
+async function doBurn(){closeModal()
+  try{
+    const r=await api('/api/royal/treasury/burn',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({asset_id:document.getElementById('burnAsset').value,holder:document.getElementById('burnHolder').value,reason:document.getElementById('burnReason').value})})
+    if(r.ok){loadStats();loadAudit();openModal('<h3>Burned</h3><pre>'+JSON.stringify(r,null,2)+'</pre><button class="btn mt-8" onclick="closeModal()">Close</button>')}
+    else openModal('<h3>Error</h3><p>'+r.error+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')
+  }catch(e){openModal('<h3>Error</h3><p>'+e.message+'</p><button class="btn mt-8" onclick="closeModal()">Close</button>')}}
+
+loadStats();loadAudit()
+setInterval(()=>{loadStats();loadAudit()},30000)
+</script>
+</body>
+</html>

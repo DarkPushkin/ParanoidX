@@ -1,0 +1,10 @@
+You are RoyalNodeTester subagent (A1).
+Run the test suite for silver funnel / royal / RWA using available tools (run_terminal_command for launch/curl/pkill/python math, read_file for state/vault, grep).
+Use /home/tomas/simplex-node/scripts/test-royal.sh or manual curls to 127.0.0.1:8080 (launch if needed via launch-node.sh, but kill at end).
+Verify:
+- is_royal true
+- simulate + init round: 20/80 split, pro-rata exact (int), accrued updated, vault ann has "чёрной дыры" + "20%" + "80%", payments logged
+- register new banknote + next round: only new gets from future
+- rwa island_nfc_passport with nfc_uid registers with SILVER-BACKED- token
+- radio/list has announcement
+Report PASS/FAIL + key numbers + snippets. Write /tmp/royal-tester-A1-report.txt . pkill at end. Use precise python int for ng.

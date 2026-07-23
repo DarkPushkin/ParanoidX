@@ -1,0 +1,157 @@
+package economy
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestLoadSaveLedger(t *testing.T) {
+	dir := t.TempDir()
+	l := LoadLedger(dir)
+	if l == nil {
+		t.Fatal("LoadLedger returned nil")
+	}
+	if l.Accounts == nil {
+		t.Fatal("Accounts map is nil")
+	}
+	l.Save(dir)
+
+	l2 := LoadLedger(dir)
+	if l2 == nil {
+		t.Fatal("LoadLedger roundtrip returned nil")
+	}
+	if l2.Version != l.Version {
+		t.Errorf("Version mismatch: got %d want %d", l2.Version, l.Version)
+	}
+}
+
+func TestEnsureAccount(t *testing.T) {
+	dir := t.TempDir()
+	l := LoadLedger(dir)
+	pub := "test-pubkey-1"
+	l.EnsureAccount(pub)
+	if _, ok := l.Accounts[pub]; !ok {
+		t.Fatalf("account %s not created", pub)
+	}
+	l.EnsureAccount(pub)
+	if len(l.Accounts) != 1 {
+		t.Fatalf("duplicate ensure created extra account, got %d", len(l.Accounts))
+	}
+}
+
+func TestCreditDebit(t *testing.T) {
+	dir := t.TempDir()
+	l := LoadLedger(dir)
+	pub := "test-pubkey-2"
+	l.EnsureAccount(pub)
+
+	err := l.Credit(dir, pub, 1000, "test-credit")
+	if err != nil {
+		t.Fatalf("Credit failed: %v", err)
+	}
+	acc := l.Accounts[pub]
+	if acc.BalanceNg != 1000 {
+		t.Errorf("balance after credit: got %d want %d", acc.BalanceNg, 1000)
+	}
+
+	err = l.Debit(dir, pub, 400, "test-debit")
+	if err != nil {
+		t.Fatalf("Debit failed: %v", err)
+	}
+	acc = l.Accounts[pub]
+	if acc.BalanceNg != 600 {
+		t.Errorf("balance after debit: got %d want %d", acc.BalanceNg, 600)
+	}
+
+	err = l.Debit(dir, pub, 1000, "overdraft")
+	if err == nil {
+		t.Fatal("expected error on overdraft, got nil")
+	}
+	if acc.BalanceNg != 600 {
+		t.Errorf("balance after failed debit changed: got %d", acc.BalanceNg)
+	}
+}
+
+func TestMintBurn(t *testing.T) {
+	dir := t.TempDir()
+	l := LoadLedger(dir)
+
+	err := l.Mint(dir, "mint-pub", 5000, "genesis")
+	if err != nil {
+		t.Fatalf("Mint failed: %v", err)
+	}
+	if l.TotalSupply != 5000 {
+		t.Errorf("TotalSupply after mint: got %d want %d", l.TotalSupply, 5000)
+	}
+
+	err = l.Burn(dir, "mint-pub", 2000, "retire")
+	if err != nil {
+		t.Fatalf("Burn failed: %v", err)
+	}
+	if l.TotalSupply != 3000 {
+		t.Errorf("TotalSupply after burn: got %d want %d", l.TotalSupply, 3000)
+	}
+}
+
+func TestTransfer(t *testing.T) {
+	dir := t.TempDir()
+	l := LoadLedger(dir)
+	from := "from-pub"
+	to := "to-pub"
+	l.EnsureAccount(from)
+	l.EnsureAccount(to)
+	l.Credit(dir, from, 1000, "init")
+
+	err := l.Transfer(dir, from, to, 300, "xfer")
+	if err != nil {
+		t.Fatalf("Transfer failed: %v", err)
+	}
+	if l.Accounts[from].BalanceNg != 700 {
+		t.Errorf("from balance: got %d want 700", l.Accounts[from].BalanceNg)
+	}
+	if l.Accounts[to].BalanceNg != 300 {
+		t.Errorf("to balance: got %d want 300", l.Accounts[to].BalanceNg)
+	}
+
+	err = l.Transfer(dir, from, to, 2000, "over")
+	if err == nil {
+		t.Fatal("expected transfer error, got nil")
+	}
+}
+
+func TestNGPerTLR(t *testing.T) {
+	if NGPerTLR != 31_103_480_000 {
+		t.Errorf("NGPerTLR mismatch: got %d", NGPerTLR)
+	}
+}
+
+func TestLoadLedgerMissingFile(t *testing.T) {
+	dir := t.TempDir()
+	l := LoadLedger(dir)
+	if l == nil {
+		t.Fatal("LoadLedger returned nil for missing file")
+	}
+	if l.Accounts == nil {
+		t.Fatal("Accounts map is nil for missing file")
+	}
+	if l.Version != 2 {
+		t.Errorf("default version: got %d want 2", l.Version)
+	}
+}
+
+func TestSaveLedgerAtomic(t *testing.T) {
+	dir := t.TempDir()
+	l := LoadLedger(dir)
+	l.EnsureAccount("a1")
+	l.Credit(dir, "a1", 100, "t1")
+	l.Save(dir)
+
+	b, err := os.ReadFile(filepath.Join(dir, "liquid_ledger.json"))
+	if err != nil {
+		t.Fatalf("ledger file missing after save: %v", err)
+	}
+	if len(b) == 0 {
+		t.Fatal("ledger file is empty")
+	}
+}

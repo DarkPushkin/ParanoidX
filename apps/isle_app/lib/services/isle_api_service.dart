@@ -18,6 +18,8 @@ class IsleApiService {
   PosClient get pos => PosClient(client);
   RoyalClient get royal => RoyalClient(client);
   RadioClient get radio => RadioClient(client);
+  TokenClient get token => TokenClient(client);
+  ExternalWalletClient get externalWallet => ExternalWalletClient(client);
 
   Future<Map<String, dynamic>> getBalance() =>
       wallet.balance(pubkey: pubkey);

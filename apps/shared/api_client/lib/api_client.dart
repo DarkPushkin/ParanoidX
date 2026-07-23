@@ -15,3 +15,5 @@ export 'src/economy_client.dart';
 export 'src/pos_client.dart';
 export 'src/royal_client.dart';
 export 'src/radio_client.dart';
+export 'src/token_client.dart';
+export 'src/external_wallet_client.dart';

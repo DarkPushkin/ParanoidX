@@ -9,3 +9,5 @@ export 'src/system_status.dart';
 export 'src/health_status.dart';
 export 'src/billing_entry.dart';
 export 'src/radio.dart';
+export 'src/token.dart';
+export 'src/external_wallet.dart';

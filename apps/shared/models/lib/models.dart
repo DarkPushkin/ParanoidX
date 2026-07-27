@@ -11,3 +11,5 @@ export 'src/billing_entry.dart';
 export 'src/radio.dart';
 export 'src/token.dart';
 export 'src/external_wallet.dart';
+export 'src/identity.dart';
+export 'src/identity_service.dart';

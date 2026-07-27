@@ -1,14 +1,15 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Encrypted preferences using SHA-256 hashing for sensitive values.
-/// PINs are stored as SHA-256(PIN + device_key) instead of plaintext.
-/// SecurePrefs manages encrypted preferences using SHA-256 hashing for sensitive values.
+import 'package:models/models.dart';
+
+/// SecurePrefs provides a simple interface for secure storage,
+/// now backed by the shared SecureIdentityService.
+/// 
+/// For PIN storage, it uses hashed verification.
+/// For mnemonic/key storage, it delegates to SecureIdentityService.
 class SecurePrefs {
   static SecurePrefs? _instance;
-  String _deviceKey = '';
   bool _ready = false;
 
   SecurePrefs._();
@@ -21,29 +22,16 @@ class SecurePrefs {
   }
 
   Future<void> _init() async {
-    final seed = StringBuffer('simplex-prefs-salt');
-    try {
-      seed.write(await File('/etc/machine-id').readAsString());
-    } catch (_) {
-      seed.write((await _runCmd('hostname')).trim());
-    }
-    try {
-      seed.write((await _runCmd('id', ['-u'])).trim());
-    } catch (_) {}
-    _deviceKey = sha256.convert(utf8.encode(seed.toString())).toString();
+    // Ensure identity service is initialized
+    await SecureIdentityService.instance;
     _ready = true;
-  }
-
-  Future<String> _runCmd(String cmd, [List<String>? args]) async {
-    final proc = await Process.run(cmd, args ?? []);
-    return proc.stdout as String;
   }
 
   /// Store a hashed value (one-way, for PIN verification)
   Future<void> setHashed(String key, String value) async {
     if (!_ready) await _init();
     final prefs = await SharedPreferences.getInstance();
-    final hash = _hash(value);
+    final hash = sha256.convert(utf8.encode(value)).toString();
     await prefs.setString('_sec_$key', hash);
   }
 
@@ -53,7 +41,7 @@ class SecurePrefs {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getString('_sec_$key');
     if (stored == null) return false;
-    return stored == _hash(value);
+    return stored == sha256.convert(utf8.encode(value)).toString();
   }
 
   /// Check if a key exists in secure storage
@@ -68,21 +56,18 @@ class SecurePrefs {
     await prefs.remove('_sec_$key');
   }
 
-  /// Store an encrypted (reversible) value
+  /// Store a string value (plain, for non-sensitive data)
   Future<void> setString(String key, String value) async {
     if (!_ready) await _init();
     final prefs = await SharedPreferences.getInstance();
-    final encrypted = _xorEncrypt(value);
-    await prefs.setString('_sec_str_$key', encrypted);
+    await prefs.setString('_sec_str_$key', value);
   }
 
-  /// Read a reversibly encrypted value
+  /// Read a string value
   Future<String?> getString(String key) async {
     if (!_ready) await _init();
     final prefs = await SharedPreferences.getInstance();
-    final encrypted = prefs.getString('_sec_str_$key');
-    if (encrypted == null) return null;
-    return _xorDecrypt(encrypted);
+    return prefs.getString('_sec_str_$key');
   }
 
   /// Clear all secure entries
@@ -94,27 +79,64 @@ class SecurePrefs {
     }
   }
 
-  String _hash(String value) {
-    return sha256.convert(utf8.encode('$value:$_deviceKey')).toString();
+  /// Store identity mnemonic (delegates to SecureIdentityService)
+  Future<void> storeMnemonic({
+    required String mnemonic,
+    required String passphrase,
+    String? label,
+  }) async {
+    await SecureIdentityService.instance;
+    final service = await SecureIdentityService.instance;
+    await service.importIdentity(
+      mnemonic: mnemonic,
+      passphrase: passphrase,
+      label: label,
+    );
   }
 
-  String _xorEncrypt(String value) {
-    final bytes = utf8.encode(value);
-    final key = sha256.convert(utf8.encode(_deviceKey)).bytes;
-    final result = <int>[];
-    for (var i = 0; i < bytes.length; i++) {
-      result.add(bytes[i] ^ key[i % key.length]);
-    }
-    return base64UrlEncode(result);
+  /// Get current identity
+  Future<Identity?> getCurrentIdentity() async {
+    await SecureIdentityService.instance;
+    final service = await SecureIdentityService.instance;
+    return service.getCurrentIdentity();
   }
 
-  String _xorDecrypt(String encoded) {
-    final bytes = base64Decode(encoded);
-    final key = sha256.convert(utf8.encode(_deviceKey)).bytes;
-    final result = <int>[];
-    for (var i = 0; i < bytes.length; i++) {
-      result.add(bytes[i] ^ key[i % key.length]);
-    }
-    return utf8.decode(result);
+  /// Get all identities
+  Future<List<Identity>> getAllIdentities() async {
+    await SecureIdentityService.instance;
+    final service = await SecureIdentityService.instance;
+    return service.getAllIdentities();
+  }
+
+  /// Verify mnemonic against stored identity
+  Future<bool> verifyMnemonic(String identityId, String mnemonic, {String passphrase = ''}) async {
+    await SecureIdentityService.instance;
+    final service = await SecureIdentityService.instance;
+    return service.verifyIdentity(
+      identityId: identityId,
+      mnemonic: mnemonic,
+      passphrase: passphrase,
+    );
+  }
+
+  /// Export mnemonic (for backup)
+  Future<String?> exportMnemonic(String identityId, String passphrase) async {
+    await SecureIdentityService.instance;
+    final service = await SecureIdentityService.instance;
+    return service.exportMnemonic(identityId: identityId, passphrase: passphrase);
+  }
+
+  /// Delete identity
+  Future<void> deleteIdentity(String identityId) async {
+    await SecureIdentityService.instance;
+    final service = await SecureIdentityService.instance;
+    return service.deleteIdentity(identityId);
+  }
+
+  /// Set identity label
+  Future<void> setIdentityLabel(String identityId, String label) async {
+    await SecureIdentityService.instance;
+    final service = await SecureIdentityService.instance;
+    return service.setIdentityLabel(identityId, label);
   }
 }

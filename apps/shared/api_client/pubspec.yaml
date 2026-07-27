@@ -7,5 +7,16 @@ environment:
 
 dependencies:
   http: ^1.2.0
+  web_socket_channel: ^2.4.0
+  drift: ^2.14.0
+  sqlite3_flutter_libs: ^0.5.0
   models:
-    path: ../models
+    git:
+      url: https://github.com/PerfectFriend/simplex-node.git
+      ref: v1.0.0-shared
+      path: apps/shared/models
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0

@@ -15,7 +15,10 @@ dependencies:
   google_fonts: ^6.1.0
   flutter_animate: ^4.5.0
   models:
-    path: ../shared/models
+    git:
+      url: https://github.com/PerfectFriend/simplex-node.git
+      ref: v1.0.0-shared
+      path: apps/shared/models
 
 dev_dependencies:
   flutter_test:

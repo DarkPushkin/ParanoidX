@@ -9,12 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  api_client:
-    path: ../shared/api_client
-  models:
-    path: ../shared/models
-  widgets:
-    path: ../shared/widgets
+  provider: ^6.1.0
   http: ^1.2.0
   intl: ^0.19.0
   qr_flutter: ^4.1.0
@@ -22,11 +17,21 @@ dependencies:
   path_provider: ^2.1.0
   shared_preferences: ^2.2.0
   crypto: ^3.0.3
-  bip39: ^1.0.6
-  bip32: ^3.0.0
-  ed25519_hd_key: ^2.0.0
-  pointycastle: ^3.8.0
-  convert: ^3.1.1
+  models:
+    git:
+      url: https://github.com/PerfectFriend/simplex-node.git
+      ref: v1.0.0-shared
+      path: apps/shared/models
+  api_client:
+    git:
+      url: https://github.com/PerfectFriend/simplex-node.git
+      ref: v1.0.0-shared
+      path: apps/shared/api_client
+  widgets:
+    git:
+      url: https://github.com/PerfectFriend/simplex-node.git
+      ref: v1.0.0-shared
+      path: apps/shared/widgets
 
 dev_dependencies:
   flutter_test:

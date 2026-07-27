@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme.dart';
@@ -10,6 +11,7 @@ import 'screens/dc_cloud_screen.dart';
 import 'screens/governance_screen.dart';
 import 'screens/system_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/lock_screen.dart';
 
 void main() {
   runApp(const RoyalApp());
@@ -27,25 +29,76 @@ class RoyalApp extends StatelessWidget {
         title: 'Isle Royal',
         theme: RoyalTheme.dark,
         debugShowCheckedModeBanner: false,
-        home: const RoyalShell(),
+        home: const AuthGate(),
       ),
     );
   }
 }
 
+/// AuthGate decides whether to show lock screen or main shell based on unlock state.
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    if (!state.unlocked) {
+      return LockScreen(onUnlocked: () => state.setUnlocked(true));
+    }
+    return const RoyalShell();
+  }
+}
+
 /// AppState manages application-wide state management for the Royal client.
 class AppState extends ChangeNotifier {
-  final RoyalApiService api = RoyalApiService('http://127.0.0.1:8080');
+  final RoyalApiService api = RoyalApiService();
   int selectedIndex = 0;
   bool isOffline = false;
+  bool unlocked = false;
+  Map<String, dynamic>? liveTelemetry;
+  StreamSubscription? _sseSub;
 
-  void setIndex(int i) { selectedIndex = i; notifyListeners(); }
-  void setOffline(bool v) { isOffline = v; notifyListeners(); }
+  AppState() {
+    _startSSE();
+  }
+
+  void _startSSE() {
+    try {
+      _sseSub?.cancel();
+      _sseSub = api.sseEvents().listen((data) {
+        liveTelemetry = data;
+        notifyListeners();
+      }, onError: (_) {});
+    } catch (_) {}
+  }
+
+  void setIndex(int i) {
+    selectedIndex = i;
+    notifyListeners();
+  }
+
+  void setOffline(bool v) {
+    isOffline = v;
+    notifyListeners();
+  }
+
+  void setUnlocked(bool v) {
+    unlocked = v;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _sseSub?.cancel();
+    api.dispose();
+    super.dispose();
+  }
 }
 
 /// RoyalShell manages the main shell with NavigationRail-based screen routing.
 class RoyalShell extends StatefulWidget {
   const RoyalShell({super.key});
+
   @override
   State<RoyalShell> createState() => _RoyalShellState();
 }
@@ -89,7 +142,7 @@ class _RoyalShellState extends State<RoyalShell> {
                           border: Border.all(color: RoyalTheme.gold, width: 2),
                           boxShadow: [BoxShadow(color: RoyalTheme.gold.withAlpha(40), blurRadius: 8)],
                         ),
-                        child: Center(
+                        child: const Center(
                           child: Text('♚', style: TextStyle(fontSize: 24, color: RoyalTheme.gold)),
                         ),
                       ),

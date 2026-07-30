@@ -1,0 +1,20 @@
+{
+  "log": {"loglevel": "warning"},
+  "inbounds": [
+    {
+      "port": 10810,
+      "protocol": "socks",
+      "settings": {"auth": "no", "udp": true},
+      "tag": "socks"
+    }
+  ],
+  "outbounds": [
+    {"protocol": "freedom", "tag": "direct"}
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {"type": "field", "outboundTag": "direct", "ip": ["0.0.0.0/0", "::/0"]}
+    ]
+  }
+}
